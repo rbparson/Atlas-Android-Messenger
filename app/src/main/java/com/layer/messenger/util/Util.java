@@ -4,6 +4,8 @@ import android.content.Context;
 
 import com.layer.messenger.App;
 import com.layer.sdk.LayerClient;
+import com.layer.ui.avatar.IdentityNameFormatter;
+import com.layer.ui.avatar.IdentityNameFormatterImpl;
 import com.layer.ui.conversationitem.ConversationItemFormatter;
 import com.layer.ui.messagetypes.CellFactory;
 import com.layer.ui.messagetypes.location.LocationCellFactory;
@@ -26,6 +28,7 @@ public class Util {
     private static ConversationItemFormatter sConversationItemFormatter;
     private static Set<CellFactory> sCellFactories;
     private static ImageCacheWrapper sImageCacheWrapper;
+    private static IdentityNameFormatter sIdentityNameFormatter;
 
     public static void init(Context context, LayerClient layerClient, Picasso picasso) {
         DateFormat dateFormat = android.text.format.DateFormat.getDateFormat(context);
@@ -45,7 +48,7 @@ public class Util {
             sCellFactories.add(new SinglePartImageCellFactory(layerClient, picasso));
             sCellFactories.add(new LocationCellFactory(picasso));
 
-            if (sConversationItemFormatter !=null) {
+            if (sConversationItemFormatter != null) {
                 sConversationItemFormatter.setCellFactories(sCellFactories);
             }
         }
@@ -71,5 +74,13 @@ public class Util {
             sImageCacheWrapper = new PicassoImageCacheWrapper(App.getPicasso());
         }
         return sImageCacheWrapper;
+    }
+
+    public static IdentityNameFormatter getIdentityNameFormatter() {
+        if (sIdentityNameFormatter == null) {
+            sIdentityNameFormatter = new IdentityNameFormatterImpl();
+        }
+
+        return sIdentityNameFormatter;
     }
 }

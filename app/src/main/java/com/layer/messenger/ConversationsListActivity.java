@@ -41,7 +41,8 @@ public class ConversationsListActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         mConversationsList = binding.conversationsList;
 
-        mConversationItemsListViewModel = new ConversationItemsListViewModel(this, App.getLayerClient(), Util.getConversationItemFormatter(), Util.getImageCacheWrapper());
+        mConversationItemsListViewModel = new ConversationItemsListViewModel(this, App.getLayerClient(),
+                Util.getConversationItemFormatter(), Util.getImageCacheWrapper(), Util.getIdentityNameFormatter());
         mConversationItemsListViewModel.setItemClickListener(new OnItemClickListener<Conversation>() {
             @Override
             public void onItemClick(Conversation conversation) {
