@@ -18,7 +18,7 @@ import com.layer.sdk.messaging.Conversation;
 import com.layer.ui.adapters.ConversationItemsAdapter;
 import com.layer.ui.conversation.ConversationItemsListView;
 import com.layer.ui.conversation.ConversationItemsListViewModel;
-import com.layer.ui.conversationitem.OnItemClickListener;
+import com.layer.ui.recyclerview.OnItemClickListener;
 import com.layer.ui.util.views.SwipeableItem;
 
 public class ConversationsListActivity extends AppCompatActivity {
