@@ -1,16 +1,18 @@
 package com.layer.messenger.util;
 
+import static com.layer.messenger.util.Util.streamToString;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.widget.Toast;
 
-import com.layer.messenger.R;
 import com.layer.messenger.LoginActivity;
+import com.layer.messenger.R;
 import com.layer.messenger.ResumeActivity;
 import com.layer.sdk.LayerClient;
-import com.layer.sdk.exceptions.LayerException;
+import com.layer.sdk.authentication.AuthenticationChallengeListener;
 
 import org.json.JSONObject;
 
@@ -20,9 +22,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-import static com.layer.messenger.util.Util.streamToString;
-
-public class LayerAuthenticationProvider implements AuthenticationProvider<LayerAuthenticationProvider.Credentials> {
+public class LayerAuthenticationProvider implements AuthenticationProvider<LayerAuthenticationProvider.Credentials>,
+        AuthenticationChallengeListener {
     private static final String TAG = LayerAuthenticationProvider.class.getSimpleName();
 
     private final SharedPreferences mPreferences;
@@ -49,29 +50,30 @@ public class LayerAuthenticationProvider implements AuthenticationProvider<Layer
         return this;
     }
 
+
     @Override
-    public void onAuthenticated(LayerClient layerClient, String userId) {
+    public void onAuthenticated(LayerClient client, String userId) {
         if (Log.isLoggable(Log.VERBOSE)) Log.v("Authenticated with Layer, user ID: " + userId);
-        layerClient.connect();
+        client.connect();
         if (mCallback != null) mCallback.onSuccess(this, userId);
     }
 
     @Override
-    public void onDeauthenticated(LayerClient layerClient) {
+    public void onDeauthenticated(LayerClient client, String userId) {
         if (Log.isLoggable(Log.VERBOSE)) Log.v("Deauthenticated with Layer");
+    }
+
+    @Override
+    public void onAuthenticationError(LayerClient client, Exception exception) {
+        String error = "Failed to authenticate with Layer: " + exception.getMessage();
+        if (Log.isLoggable(Log.ERROR)) Log.e(error, exception);
+        if (mCallback != null) mCallback.onError(this, error);
     }
 
     @Override
     public void onAuthenticationChallenge(LayerClient layerClient, String nonce) {
         if (Log.isLoggable(Log.VERBOSE)) Log.v("Received challenge: " + nonce);
         respondToChallenge(layerClient, nonce);
-    }
-
-    @Override
-    public void onAuthenticationError(LayerClient layerClient, LayerException e) {
-        String error = "Failed to authenticate with Layer: " + e.getMessage();
-        if (Log.isLoggable(Log.ERROR)) Log.e(error, e);
-        if (mCallback != null) mCallback.onError(this, error);
     }
 
     @Override
@@ -203,7 +205,7 @@ public class LayerAuthenticationProvider implements AuthenticationProvider<Layer
             // Answer authentication challenge.
             String identityToken = json.optString("layer_identity_token", null);
             if (Log.isLoggable(Log.VERBOSE)) Log.v("Got identity token: " + identityToken);
-            layerClient.answerAuthenticationChallenge(identityToken);
+            layerClient.authenticate(identityToken);
         } catch (Exception e) {
             String error = "Error when authenticating with provider: " + e.getMessage();
             if (Log.isLoggable(Log.ERROR)) Log.e(error, e);

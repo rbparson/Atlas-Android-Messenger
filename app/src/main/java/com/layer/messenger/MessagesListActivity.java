@@ -20,12 +20,14 @@ import android.widget.TextView;
 import com.layer.messenger.databinding.ActivityMessagesListBinding;
 import com.layer.messenger.util.Util;
 import com.layer.sdk.LayerClient;
+import com.layer.sdk.LayerDataObserver;
+import com.layer.sdk.LayerDataRequest;
 import com.layer.sdk.changes.LayerChange;
 import com.layer.sdk.changes.LayerChangeEvent;
 import com.layer.sdk.exceptions.LayerConversationException;
-import com.layer.sdk.listeners.LayerChangeEventListener;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.ConversationOptions;
+import com.layer.sdk.messaging.ConversationType;
 import com.layer.sdk.messaging.Identity;
 import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.messaging.Message;
@@ -57,6 +59,8 @@ public class MessagesListActivity extends AppCompatActivity {
     private ActivityMessagesListBinding mActivityMessagesListBinding;
     private ActionBar mActionBar;
 
+    private LayerClient mLayerClient;
+
     private enum UiState {
         ADDRESS,
         ADDRESS_COMPOSER,
@@ -76,6 +80,8 @@ public class MessagesListActivity extends AppCompatActivity {
         if (mActionBar == null) return;
         mActionBar.setDisplayHomeAsUpEnabled(true);
         mActionBar.setTitle(R.string.title_select_conversation);
+
+        mLayerClient = ((App) getApplication()).getLayerClient();
 
         if (App.routeLogin(this)) {
             if (!isFinishing()) finish();
@@ -107,13 +113,13 @@ public class MessagesListActivity extends AppCompatActivity {
 
         // Register for identity changes and update the activity's title as needed
         mIdentityChangeListener = new IdentityChangeListener();
-        App.getLayerClient().registerEventListener(mIdentityChangeListener);
+        mLayerClient.registerDataObserver(mIdentityChangeListener);
     }
 
     @Override
     protected void onPause() {
         // Update the notification position to the latest seen
-        PushNotificationReceiver.getNotifications(this).clear(mConversation);
+        PushNotificationReceiver.getNotifications(this).clear(mLayerClient, mConversation);
 
         App.getLayerClient().unregisterEventListener(mIdentityChangeListener);
         super.onPause();
@@ -194,13 +200,13 @@ public class MessagesListActivity extends AppCompatActivity {
 
     private void setupComposeBar() {
         mComposeBar = mActivityMessagesListBinding.conversation.getComposeBar();
-        mComposeBar.setTextSender(new TextSender(this, App.getLayerClient()));
+        mComposeBar.setTextSender(new TextSender(this, mLayerClient));
         mComposeBar.addAttachmentSendersToDefaultAttachmentButton(
                 new CameraSender(R.string.attachment_menu_camera,
-                        R.drawable.ic_photo_camera_white_24dp, this, App.getLayerClient(),
+                        R.drawable.ic_photo_camera_white_24dp, this, mLayerClient,
                         getApplicationContext().getPackageName() + ".file_provider"),
-                new GallerySender(R.string.attachment_menu_gallery, R.drawable.ic_photo_white_24dp, this, App.getLayerClient()),
-                new LocationSender(R.string.attachment_menu_location, R.drawable.ic_place_white_24dp, this, App.getLayerClient()));
+                new GallerySender(R.string.attachment_menu_gallery, R.drawable.ic_photo_white_24dp, this, mLayerClient),
+                new LocationSender(R.string.attachment_menu_location, R.drawable.ic_place_white_24dp, this, mLayerClient));
 
         mComposeBar.setOnMessageEditTextFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
@@ -215,11 +221,11 @@ public class MessagesListActivity extends AppCompatActivity {
 
     private void setupConversation(Conversation conversation) {
         mConversationView = mActivityMessagesListBinding.conversation;
-        mMessageItemsListViewModel = new MessageItemsListViewModel(this, App.getLayerClient(),
+        mMessageItemsListViewModel = new MessageItemsListViewModel(this, mLayerClient,
                 Util.getImageCacheWrapper(), Util.getDateFormatter(this));
 
-        mConversationViewModel = new ConversationViewModel(getApplicationContext(), App.getLayerClient(),
-                Util.getCellFactories(App.getLayerClient()), Util.getImageCacheWrapper(),
+        mConversationViewModel = new ConversationViewModel(getApplicationContext(), mLayerClient,
+                Util.getCellFactories(mLayerClient), Util.getImageCacheWrapper(),
                 Util.getDateFormatter(getApplicationContext()),
                 new SwipeableItem.OnItemSwipeListener<Message>() {
                     @Override
@@ -261,7 +267,7 @@ public class MessagesListActivity extends AppCompatActivity {
 
     private void setupAddressBar() {
         mAddressBar = mActivityMessagesListBinding.conversationLauncher
-                .init(App.getLayerClient(), Util.getImageCacheWrapper())
+                .init(mLayerClient, Util.getImageCacheWrapper())
                 .setOnConversationClickListener(new AddressBar.OnConversationClickListener() {
                     @Override
                     public void onConversationClick(AddressBar addressBar, Conversation conversation) {
@@ -276,11 +282,9 @@ public class MessagesListActivity extends AppCompatActivity {
                             setConversation(null, false);
                             return;
                         }
-                        try {
-                            setConversation(App.getLayerClient().newConversation(new ConversationOptions().distinct(true), new HashSet<>(participants)), false);
-                        } catch (LayerConversationException e) {
-                            setConversation(e.getConversation(), false);
-                        }
+                        setConversation(mLayerClient.newConversation(new ConversationOptions().type(
+                                ConversationType.DIRECT_MESSAGE_CONVERSATION),
+                                new HashSet<>(participants)), false);
                     }
                 })
                 .addTextChangedListener(new TextWatcher() {
@@ -318,7 +322,7 @@ public class MessagesListActivity extends AppCompatActivity {
         if (!useConversation) {
             mActionBar.setTitle(R.string.title_select_conversation);
         } else {
-            mActionBar.setTitle(Util.getConversationItemFormatter().getConversationTitle(App.getLayerClient().getAuthenticatedUser(), mConversation));
+            mActionBar.setTitle(Util.getConversationItemFormatter().getConversationTitle(mLayerClient.getAuthenticatedUser(), mConversation));
         }
     }
 
@@ -379,15 +383,16 @@ public class MessagesListActivity extends AppCompatActivity {
     // Inner classes
     //=============================================================================================
 
-    class IdentityChangeListener implements LayerChangeEventListener.Weak {
+    class IdentityChangeListener implements LayerDataObserver.Weak {
+
         @Override
-        public void onChangeEvent(LayerChangeEvent layerChangeEvent) {
+        public void onDataChanged(LayerChangeEvent event) {
             // Don't need to update title if there is no conversation
             if (mConversation == null) {
                 return;
             }
 
-            for (LayerChange change : layerChangeEvent.getChanges()) {
+            for (LayerChange change : event.getChanges()) {
                 if (change.getObjectType().equals(LayerObject.Type.IDENTITY)) {
                     Identity identity = (Identity) change.getObject();
                     if (mConversation.getParticipants().contains(identity)) {
@@ -395,6 +400,11 @@ public class MessagesListActivity extends AppCompatActivity {
                     }
                 }
             }
+        }
+
+        @Override
+        public void onDataRequestCompleted(LayerDataRequest request, LayerObject object) {
+
         }
     }
 }

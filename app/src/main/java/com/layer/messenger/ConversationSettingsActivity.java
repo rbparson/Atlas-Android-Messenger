@@ -23,11 +23,14 @@ import android.widget.Toast;
 import com.layer.messenger.databinding.ActivityConversationSettingsBinding;
 import com.layer.messenger.util.Util;
 import com.layer.sdk.LayerClient;
+import com.layer.sdk.LayerDataObserver;
+import com.layer.sdk.LayerDataRequest;
 import com.layer.sdk.changes.LayerChangeEvent;
 import com.layer.sdk.listeners.LayerChangeEventListener;
 import com.layer.sdk.listeners.LayerPolicyListener;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.Identity;
+import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.policy.Policy;
 import com.layer.ui.identity.IdentityItemsListView;
 import com.layer.ui.identity.IdentityItemsListViewModel;
@@ -37,7 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class ConversationSettingsActivity extends AppCompatActivity implements LayerPolicyListener, LayerChangeEventListener {
+public class ConversationSettingsActivity extends AppCompatActivity implements LayerDataObserver {
     private EditText mConversationName;
     private Switch mShowNotifications;
     private IdentityItemsListView mParticipantRecyclerView;
@@ -88,26 +91,27 @@ public class ConversationSettingsActivity extends AppCompatActivity implements L
                     });
                 }
 
-                final Policy blockPolicy = getBlockPolicy(App.getLayerClient(), item);
-
-                builder.setPositiveButton(blockPolicy == null ? R.string.alert_button_block : R.string.alert_button_unblock,
-                        new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                if (blockPolicy == null) {
-                                    // Block
-                                    Policy policy = new Policy.Builder(Policy.PolicyType.BLOCK).sentByUserId(item.getUserId()).build();
-                                    App.getLayerClient().addPolicy(policy);
-                                } else {
-                                    App.getLayerClient().removePolicy(blockPolicy);
-                                }
-                            }
-                        }).setNegativeButton(R.string.alert_button_cancel, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                }).show();
+                // TODO Blocking support
+//                final Policy blockPolicy = getBlockPolicy(App.getLayerClient(), item);
+//
+//                builder.setPositiveButton(blockPolicy == null ? R.string.alert_button_block : R.string.alert_button_unblock,
+//                        new DialogInterface.OnClickListener() {
+//                            @Override
+//                            public void onClick(DialogInterface dialog, int which) {
+//                                if (blockPolicy == null) {
+//                                    // Block
+//                                    Policy policy = new Policy.Builder(Policy.PolicyType.BLOCK).sentByUserId(item.getUserId()).build();
+//                                    App.getLayerClient().addPolicy(policy);
+//                                } else {
+//                                    App.getLayerClient().removePolicy(blockPolicy);
+//                                }
+//                            }
+//                        }).setNegativeButton(R.string.alert_button_cancel, new DialogInterface.OnClickListener() {
+//                    @Override
+//                    public void onClick(DialogInterface dialog, int which) {
+//                        dialog.dismiss();
+//                    }
+//                }).show();
             }
 
             @Override
@@ -265,24 +269,30 @@ public class ConversationSettingsActivity extends AppCompatActivity implements L
         mItemsListViewModel.setIdentities(participantsMinusMe);
     }
 
-    private Policy getBlockPolicy(LayerClient client, Identity identity) {
-        for (Policy policy : client.getPolicies()) {
-            if (policy.getPolicyType() == Policy.PolicyType.BLOCK
-                    && policy.getSentByUserID().equals(identity.getUserId())) {
-                return policy;
-            }
-        }
+    // TODO blocking support
+//    private Policy getBlockPolicy(LayerClient client, Identity identity) {
+//        for (Policy policy : client.getPolicies()) {
+//            if (policy.getPolicyType() == Policy.PolicyType.BLOCK
+//                    && policy.getSentByUserID().equals(identity.getUserId())) {
+//                return policy;
+//            }
+//        }
+//
+//        return null;
+//    }
+//
+//    @Override
+//    public void onPolicyListUpdate(LayerClient layerClient, List<Policy> list, List<Policy> list1) {
+//        refresh();
+//    }
 
-        return null;
-    }
 
     @Override
-    public void onPolicyListUpdate(LayerClient layerClient, List<Policy> list, List<Policy> list1) {
+    public void onDataChanged(LayerChangeEvent event) {
         refresh();
     }
 
     @Override
-    public void onChangeEvent(LayerChangeEvent layerChangeEvent) {
-        refresh();
+    public void onDataRequestCompleted(LayerDataRequest request, LayerObject object) {
     }
 }

@@ -83,7 +83,8 @@ public class PushNotificationReceiver extends BroadcastReceiver {
             }
 
             // Try to have content ready for viewing before posting a Notification
-            LayerClient layerClient = App.getLayerClient();
+            // TODO Not the best way to get a LayerClient. Should retrieve via a singleton or DI framework. Else we could just recreate it here and the SDK will return an instance if it exists.
+            LayerClient layerClient = ((App) context.getApplicationContext()).getLayerClient();
 
             if (layerClient != null) {
                 layerClient.waitForContent(messageId, new LayerClient.ContentAvailableCallback() {
@@ -92,7 +93,7 @@ public class PushNotificationReceiver extends BroadcastReceiver {
                         if (Log.isLoggable(Log.VERBOSE)) {
                             Log.v("Pre-fetched notification content");
                         }
-                        getNotifications(context).add(context, (Message) object, payload.getText());
+                        getNotifications(context).add(context, client, (Message) object, payload.getText());
                     }
 
                     @Override
@@ -106,11 +107,14 @@ public class PushNotificationReceiver extends BroadcastReceiver {
             }
 
         } else if (intent.getAction().equals(ACTION_CANCEL)) {
+            // TODO Not the best way to get a LayerClient. Should retrieve via a singleton or DI framework. Else we could just recreate it here and the SDK will return an instance if it exists.
+            LayerClient layerClient = ((App) context.getApplicationContext()).getLayerClient();
+
             // User swiped notification out
             if (Log.isLoggable(Log.VERBOSE)) {
                 Log.v("Cancelling notifications for: " + conversationId);
             }
-            getNotifications(context).clear(conversationId);
+            getNotifications(context).clear(layerClient, conversationId);
         } else {
             if (Log.isLoggable(Log.ERROR)) {
                 Log.e("Got unknown intent action: " + intent.getAction());
@@ -183,9 +187,9 @@ public class PushNotificationReceiver extends BroadcastReceiver {
             }
         }
 
-        public void clear(final Conversation conversation) {
+        public void clear(LayerClient layerClient, final Conversation conversation) {
             if (conversation == null) return;
-            clear(conversation.getId());
+            clear(layerClient, conversation.getId());
         }
 
         /**
@@ -194,13 +198,13 @@ public class PushNotificationReceiver extends BroadcastReceiver {
          *
          * @param conversationId Conversation whose notifications should be cleared
          */
-        public void clear(final Uri conversationId) {
+        public void clear(final LayerClient layerClient, final Uri conversationId) {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
                     if (conversationId == null) return;
                     String key = conversationId.toString();
-                    long maxPosition = getMaxPosition(conversationId);
+                    long maxPosition = getMaxPosition(layerClient, conversationId);
                     mMessages.edit().remove(key).commit();
                     mPositions.edit().putLong(key, maxPosition).commit();
                     mManager.cancel(key, MESSAGE_ID);
@@ -214,7 +218,7 @@ public class PushNotificationReceiver extends BroadcastReceiver {
          * @param message Message to add
          * @param text    Notification text for added Message
          */
-        protected void add(Context context, Message message, String text) {
+        protected void add(Context context, LayerClient layerClient, Message message, String text) {
             Conversation conversation = message.getConversation();
             String key = conversation.getId().toString();
             long currentPosition = mPositions.getLong(key, Long.MIN_VALUE);
@@ -243,10 +247,11 @@ public class PushNotificationReceiver extends BroadcastReceiver {
                 }
                 return;
             }
-            update(context, conversation, message);
+            update(context, layerClient, conversation, message);
         }
 
-        private void update(Context context, Conversation conversation, Message message) {
+        private void update(Context context, LayerClient layerClient, Conversation conversation,
+                Message message) {
             String messagesString = mMessages.getString(conversation.getId().toString(), null);
             if (messagesString == null) return;
 
@@ -274,7 +279,7 @@ public class PushNotificationReceiver extends BroadcastReceiver {
             Collections.sort(positions);
 
             // Construct notification
-            String conversationTitle = Util.getConversationItemFormatter().getConversationTitle(App.getLayerClient().getAuthenticatedUser(), conversation);
+            String conversationTitle = Util.getConversationItemFormatter().getConversationTitle(layerClient.getAuthenticatedUser(), conversation);
 
             NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle().setBigContentTitle(conversationTitle);
             int i;
@@ -345,8 +350,7 @@ public class PushNotificationReceiver extends BroadcastReceiver {
          * @param conversationId Conversation whose maximum Message position to return.
          * @return the current maximum Message position or Long.MIN_VALUE.
          */
-        private long getMaxPosition(Uri conversationId) {
-            LayerClient layerClient = App.getLayerClient();
+        private long getMaxPosition(LayerClient layerClient, Uri conversationId) {
 
             Query<Message> query = Query.builder(Message.class)
                     .predicate(new Predicate(Message.Property.CONVERSATION, Predicate.Operator.EQUAL_TO, conversationId))
